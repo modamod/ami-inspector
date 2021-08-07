@@ -1,1 +1,26 @@
 AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  AMI:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /ec2/ami/latest
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+  Subnet:
+    Type: AWS::EC2::Subnet::Id
+  KeyName:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /ec2/keypair
+Resources:
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      IamInstanceProfile: !ImportValue iam-Ec2InstanceProfile
+      ImageId: !Ref AMI
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      SubnetId: !Ref Subnet
+      KeyName: !Ref KeyName
+      UserData:
+        !Base64 |
+        #!/bin/bash
+        yum -y update

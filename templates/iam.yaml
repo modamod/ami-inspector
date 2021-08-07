@@ -1,1 +1,33 @@
 AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+  Ec2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonSSMAutomationRole
+  Ec2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref Ec2Role
+
+Outputs:
+  Ec2Role:
+    Value: !Ref Ec2Role
+    Export:
+      Name: !Sub "${AWS::StackName}-Ec2Role"
+  Ec2InstanceProfile:
+    Value: !Ref Ec2InstanceProfile
+    Export:
+      Name: !Sub "${AWS::StackName}-Ec2InstanceProfile"
