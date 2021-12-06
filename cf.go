@@ -9,8 +9,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-//CloudformationTemplate is a class describing the required attributes and methods to manage a cloudformation template.
-type CloudformationTemplate struct {
+//CloudformationStack is a class describing the required attributes and methods to manage a cloudformation template.
+type CloudformationStack struct {
 	TemplatePath          string
 	TemplateParameterPath string
 	StackName             string
@@ -21,8 +21,8 @@ type CloudformationTemplate struct {
 	Timeout               int64
 }
 
-func MakeCloudformationTemplate() CloudformationTemplate {
-	cf := CloudformationTemplate{
+func MakeCloudformationStack() CloudformationStack {
+	cf := CloudformationStack{
 		Capabilities: new([]string),
 		Parameters:   make(map[string]string),
 	}
@@ -31,7 +31,7 @@ func MakeCloudformationTemplate() CloudformationTemplate {
 }
 
 //GetTemplateBody returns a reference to a string containing the template body.
-func (cf *CloudformationTemplate) GetTemplateBody() *string {
+func (cf *CloudformationStack) GetTemplateBody() *string {
 	templateBody, err := ioutil.ReadFile(cf.TemplatePath)
 	if err != nil {
 		printErrorf("Something went wrong when trying to open template body. %v", err)
@@ -42,7 +42,7 @@ func (cf *CloudformationTemplate) GetTemplateBody() *string {
 }
 
 //ValidateTemplate validates a CF template returns false when the validations fails.
-func (cf *CloudformationTemplate) ValidateTemplate() (isValid bool, err error) {
+func (cf *CloudformationStack) ValidateTemplate() (isValid bool, err error) {
 	templateBody, err := ioutil.ReadFile(cf.TemplatePath)
 	if err != nil {
 		printErrorf("Something went wrong when trying to open template body. %v", err)
@@ -57,17 +57,17 @@ func (cf *CloudformationTemplate) ValidateTemplate() (isValid bool, err error) {
 }
 
 //Client is a function that returns a cloudformation client object
-func (cf *CloudformationTemplate) Client() *cloudformation.CloudFormation {
+func (cf *CloudformationStack) Client() *cloudformation.CloudFormation {
 	return cloudformation.New(cf.AwsSession)
 }
 
 //Exists a function that tests if the cloudformation exists or not.
-func (cf *CloudformationTemplate) Exists() bool {
+func (cf *CloudformationStack) Exists() bool {
 	stack, _ := cf.Client().DescribeStacks(&cloudformation.DescribeStacksInput{StackName: aws.String(cf.StackName)})
 	return stack.Stacks != nil
 }
 
-func (cf *CloudformationTemplate) GetParameters() (map[string]string, error) {
+func (cf *CloudformationStack) GetParameters() (map[string]string, error) {
 	params := make(map[string]string)
 	parametersFile, err := ioutil.ReadFile(cf.TemplateParameterPath)
 	if err != nil {
@@ -81,7 +81,7 @@ func (cf *CloudformationTemplate) GetParameters() (map[string]string, error) {
 	}
 	return params, nil
 }
-func (cf *CloudformationTemplate) GenerateParameters() ([]*cloudformation.Parameter, error) {
+func (cf *CloudformationStack) GenerateParameters() ([]*cloudformation.Parameter, error) {
 	var Parameters []*cloudformation.Parameter
 	parametersMap, err := cf.GetParameters()
 	for key, element := range parametersMap {
@@ -90,12 +90,12 @@ func (cf *CloudformationTemplate) GenerateParameters() ([]*cloudformation.Parame
 	return Parameters, err
 }
 
-func (cf *CloudformationTemplate) getCreateStackInput() (*cloudformation.CreateStackInput, error) {
-	paramters, err := cf.GenerateParameters()
+func (cf *CloudformationStack) getCreateStackInput() (*cloudformation.CreateStackInput, error) {
+	parameters, err := cf.GenerateParameters()
 	stackInput := cloudformation.CreateStackInput{
 		Capabilities:     aws.StringSlice(*cf.Capabilities),
 		DisableRollback:  aws.Bool(cf.DisableRollback),
-		Parameters:       paramters,
+		Parameters:       parameters,
 		StackName:        aws.String(cf.StackName),
 		TemplateBody:     cf.GetTemplateBody(),
 		TimeoutInMinutes: aws.Int64(cf.Timeout),
@@ -104,7 +104,7 @@ func (cf *CloudformationTemplate) getCreateStackInput() (*cloudformation.CreateS
 	return &stackInput, err
 }
 
-func (cf *CloudformationTemplate) CreateStack() (*cloudformation.CreateStackOutput, error) {
+func (cf *CloudformationStack) CreateStack() (*cloudformation.CreateStackOutput, error) {
 	stackInput, err := cf.getCreateStackInput()
 	if err != nil {
 		return nil, err
@@ -114,8 +114,43 @@ func (cf *CloudformationTemplate) CreateStack() (*cloudformation.CreateStackOutp
 	return res, err
 }
 
-func (cf *CloudformationTemplate) DeleteStack() (*cloudformation.DeleteStackOutput, error) {
+func (cf *CloudformationStack) DeleteStack() (*cloudformation.DeleteStackOutput, error) {
 	deleteStackInput := cloudformation.DeleteStackInput{StackName: aws.String(cf.StackName)}
 	res, err := cf.Client().DeleteStack(&deleteStackInput)
 	return res, err
+}
+
+func (cf *CloudformationStack) getUpdateStackInput() (*cloudformation.UpdateStackInput, error) {
+	parameters, err := cf.GenerateParameters()
+	updateStackInput := cloudformation.UpdateStackInput{
+		Capabilities: aws.StringSlice(*cf.Capabilities),
+		Parameters:   parameters,
+		StackName:    aws.String(cf.StackName),
+		TemplateBody: cf.GetTemplateBody(),
+	}
+	return &updateStackInput, err
+}
+
+func (cf *CloudformationStack) UpdateStack() (*cloudformation.UpdateStackOutput, error) {
+	updateStackInput, err := cf.getUpdateStackInput()
+	if err != nil {
+		return nil, err
+	}
+
+	updateStackOutput, err := cf.Client().UpdateStack(updateStackInput)
+
+	return updateStackOutput, err
+}
+
+func (cf *CloudformationStack) DescribeStack() (*cloudformation.DescribeStacksOutput, error) {
+	describeStacksInput := cloudformation.DescribeStacksInput{StackName: aws.String(cf.StackName)}
+	describeStacksOutpt, err := cf.Client().DescribeStacks(&describeStacksInput)
+
+	return describeStacksOutpt, err
+}
+
+func (cf *CloudformationStack) GetStatus() (string, error) {
+	describeStacksoutput, err := cf.DescribeStack()
+
+	return *describeStacksoutput.Stacks[0].StackStatus, err
 }

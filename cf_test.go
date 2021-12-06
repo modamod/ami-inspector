@@ -13,32 +13,32 @@ var SESS, _ = session.NewSession(&aws.Config{
 )
 
 func TestValidateNonExistingTemplate(t *testing.T) {
-	stack := CloudformationTemplate{TemplatePath: "nonExistingPath", StackName: "NonExisting", TemplateParameterPath: "NonExisting", AwsSession: SESS}
+	stack := CloudformationStack{TemplatePath: "nonExistingPath", StackName: "NonExisting", TemplateParameterPath: "NonExisting", AwsSession: SESS}
 	isValid, _ := stack.ValidateTemplate()
 	assert.False(t, isValid)
 }
 
 func TestValidateInvalidTemplate(t *testing.T) {
-	stack := CloudformationTemplate{TemplatePath: "./fixtures/templates/invalid_template.yaml", StackName: "", TemplateParameterPath: "", AwsSession: SESS}
+	stack := CloudformationStack{TemplatePath: "./fixtures/templates/invalid_template.yaml", StackName: "", TemplateParameterPath: "", AwsSession: SESS}
 	isValid, _ := stack.ValidateTemplate()
 	assert.False(t, isValid)
 }
 
 func TestValidateTemplateOnValidTemplate(t *testing.T) {
-	stack := CloudformationTemplate{TemplatePath: "./fixtures/templates/valid_template.yaml", StackName: "", TemplateParameterPath: "", AwsSession: SESS}
+	stack := CloudformationStack{TemplatePath: "./fixtures/templates/valid_template.yaml", StackName: "", TemplateParameterPath: "", AwsSession: SESS}
 	isValid, _ := stack.ValidateTemplate()
 	assert.True(t, isValid)
 }
 
 func TestExistsWithNonExistingStack(t *testing.T) {
-	stack := CloudformationTemplate{TemplatePath: "./fixtures/templates/valid_template.yaml", StackName: "NonExisting", TemplateParameterPath: "./fixtures/parameters/parameters.yaml", AwsSession: SESS}
+	stack := CloudformationStack{TemplatePath: "./fixtures/templates/valid_template.yaml", StackName: "NonExisting", TemplateParameterPath: "./fixtures/parameters/parameters.yaml", AwsSession: SESS}
 	assert.False(t, stack.Exists())
 }
 
 func TestExistsWithExistingStack(t *testing.T) {
 	stackParameters := make(map[string]string)
 	stackParameters["TopicName"] = "MyTopic"
-	stack := CloudformationTemplate{
+	stack := CloudformationStack{
 		TemplatePath:          "./fixtures/templates/valid_template.yaml",
 		StackName:             "Existing",
 		TemplateParameterPath: "./fixtures/parameters/parameters.yaml",
@@ -54,7 +54,7 @@ func TestExistsWithExistingStack(t *testing.T) {
 }
 
 func TestDeleteStackWithNonExistingStack(t *testing.T) {
-	stack := CloudformationTemplate{
+	stack := CloudformationStack{
 		TemplatePath:          "./fixtures/templates/valid_template.yaml",
 		StackName:             "NonExisting",
 		TemplateParameterPath: "./fixtures/parameters/parameters.yaml",
@@ -71,7 +71,7 @@ func TestDeleteStackWithNonExistingStack(t *testing.T) {
 func TestDeleteStackWithExistingStack(t *testing.T) {
 	stackParameters := make(map[string]string)
 	stackParameters["TopicName"] = "MyTopic"
-	stack := CloudformationTemplate{
+	stack := CloudformationStack{
 		TemplatePath:          "./fixtures/templates/valid_template.yaml",
 		StackName:             "Existing",
 		TemplateParameterPath: "./fixtures/parameters/parameters.yaml",
@@ -88,4 +88,76 @@ func TestDeleteStackWithExistingStack(t *testing.T) {
 	assert.True(t, stack.Exists())
 	stack.DeleteStack()
 	assert.False(t, stack.Exists())
+}
+
+func TestUpdateStackWithNonExistingStack(t *testing.T) {
+	stackParameters := make(map[string]string)
+	stackParameters["TopicName"] = "MyTopic"
+	stack := CloudformationStack{
+		TemplatePath:          "./fixtures/templates/update_template.yaml",
+		StackName:             "Existing",
+		TemplateParameterPath: "./fixtures/parameters/parameters.yaml",
+		AwsSession:            SESS,
+		Parameters:            stackParameters,
+		Timeout:               1,
+		Capabilities:          &[]string{},
+		DisableRollback:       false,
+	}
+	assert.False(t, stack.Exists())
+	_, err := stack.UpdateStack()
+	assert.Error(t, err)
+
+}
+
+func TestUpdateStackWithExistingStack(t *testing.T) {
+	stackParameters := make(map[string]string)
+	stackParameters["TopicName"] = "MyTopic"
+	stack := CloudformationStack{
+		TemplatePath:          "./fixtures/templates/valid_template.yaml",
+		StackName:             "Existing",
+		TemplateParameterPath: "./fixtures/parameters/parameters.yaml",
+		AwsSession:            SESS,
+		Parameters:            stackParameters,
+		Timeout:               1,
+		Capabilities:          &[]string{},
+		DisableRollback:       false,
+	}
+	assert.False(t, stack.Exists())
+	stack.CreateStack()
+	assert.True(t, stack.Exists())
+
+	stack.TemplatePath = "./fixtures/templates/update_template.yaml"
+	res, err := stack.UpdateStack()
+	assert.Nil(t, err)
+	assert.NotNil(t, res)
+	status, err := stack.GetStatus()
+	assert.Nil(t, err)
+	assert.Equal(t, status, "UPDATE_COMPLETE")
+	stack.DeleteStack()
+}
+
+func TestUpdateStackWithTheSameTemplateAndParameters(t *testing.T) {
+	stackParameters := make(map[string]string)
+	stackParameters["TopicName"] = "MyTopic"
+	stack := CloudformationStack{
+		TemplatePath:          "./fixtures/templates/valid_template.yaml",
+		StackName:             "Existing",
+		TemplateParameterPath: "./fixtures/parameters/parameters.yaml",
+		AwsSession:            SESS,
+		Parameters:            stackParameters,
+		Timeout:               1,
+		Capabilities:          &[]string{},
+		DisableRollback:       false,
+	}
+	assert.False(t, stack.Exists())
+	stack.CreateStack()
+	assert.True(t, stack.Exists())
+
+	res, err := stack.UpdateStack()
+	assert.Nil(t, err)
+	assert.NotNil(t, res)
+	status, err := stack.GetStatus()
+	assert.Nil(t, err)
+	assert.Equal(t, status, "UPDATE_COMPLETE")
+	stack.DeleteStack()
 }

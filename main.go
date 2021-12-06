@@ -3,14 +3,12 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -81,18 +79,25 @@ type Template struct {
 }
 
 func main() {
-	templateBody, err := ioutil.ReadFile("fixtures/parameters/parameters.yaml")
-
-	if err != nil {
-		log.Fatalf("Somthing went wrong when opening paramter file\n '%v'", err)
+	var SESS, _ = session.NewSession(&aws.Config{
+		Region: aws.String("us-east-1")},
+	)
+	stackParameters := make(map[string]string)
+	stackParameters["TopicName"] = "MyTopic"
+	stack := CloudformationStack{
+		TemplatePath:          "./fixtures/templates/valid_template.yaml",
+		StackName:             "Existing",
+		TemplateParameterPath: "./fixtures/parameters/parameters.yaml",
+		AwsSession:            SESS,
+		Parameters:            stackParameters,
+		Timeout:               1,
+		Capabilities:          &[]string{},
+		DisableRollback:       false,
 	}
-	// yamlStruct := Template{}
-
-	yamlStruct := make(map[string]string)
-	err = yaml.Unmarshal(templateBody, &yamlStruct)
-	if err != nil {
-		log.Fatalf("error: %v", err)
+	if !stack.Exists() {
+		stack.CreateStack()
 	}
-	res := yamlStruct
-	fmt.Printf("--- m:\n%v\n\n", res["TopicName"])
+
+	res, err := stack.UpdateStack()
+	fmt.Printf("res: %v\n err: %v", res, err)
 }
